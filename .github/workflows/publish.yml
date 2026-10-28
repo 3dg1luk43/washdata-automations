@@ -1,9 +1,10 @@
 name: Publish the library
 
-# After a merge: catalog.json (what WashData downloads), the README's list and
-# each template's source_url are generated from the templates and committed
-# here. Only templates that pass tools/library.py check are listed. Its own push
-# starts no workflow (GITHUB_TOKEN), so it cannot loop.
+# After a merge: catalog.json (what WashData downloads), library.json (what the
+# WashData Store website shows), the README's list and each template's
+# source_url are generated from the templates and committed here. Only
+# templates that pass tools/library.py check are listed. Its own push starts no
+# workflow (GITHUB_TOKEN), so it cannot loop.
 
 on:
   push:
@@ -32,7 +33,7 @@ jobs:
         run: python tools/library.py build
       - name: Commit them
         run: |
-          git add -A automation catalog.json README.md
+          git add -A automation catalog.json library.json README.md
           if git diff --cached --quiet; then
             echo "Nothing to publish."
             exit 0

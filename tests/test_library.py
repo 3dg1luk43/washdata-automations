@@ -101,6 +101,14 @@ def test_a_bad_file_name_is_named(tmp_path: Path) -> None:
     assert any("file name" in e for e in _template(tmp_path, GOOD, "Cut-Plug").check())
 
 
+def test_the_risk_paragraph_is_found(tmp_path: Path) -> None:
+    text = GOOD.replace("Cuts the plug.", "Cuts the plug.\n\n\n    Risk: it switches a\n    relay.")
+    t = _template(tmp_path, text)
+    assert t.check() == []
+    assert t.risk == "Risk: it switches a relay."
+    assert library.library_entry(t)["inputs"][0]["required"] is True
+
+
 def test_source_url_is_set_or_corrected() -> None:
     url = library.SOURCE_URL.format("cut_plug")
     added = library.with_source_url(GOOD, "cut_plug")
@@ -117,7 +125,7 @@ def test_build_writes_the_catalog_readme_and_source_urls(tmp_path: Path, monkeyp
     (tmp_path / "automation" / "cut_plug.yaml").write_text(GOOD, encoding="utf-8")
     (tmp_path / "automation" / "broken.yaml").write_text(GOOD.replace("author: Alex", "author: "), encoding="utf-8")
     shutil.copy(ROOT / "README.md", tmp_path / "README.md")
-    for name in ("ROOT", "CATALOG", "README"):
+    for name in ("ROOT", "CATALOG", "LIBRARY", "README"):
         monkeypatch.setattr(library, name, tmp_path / getattr(library, name).relative_to(ROOT))
     monkeypatch.setattr(library, "load_all", lambda root=tmp_path: [
         library.Template(p) for p in sorted((tmp_path / "automation").glob("*.yaml"))
@@ -127,6 +135,17 @@ def test_build_writes_the_catalog_readme_and_source_urls(tmp_path: Path, monkeyp
     assert json.loads((tmp_path / "catalog.json").read_text())  == {
         "cut_plug": {"device_types": ["dryer"], "min_version": "0.5.9", "tags": ["smart plug"], "icon": "plug"},
     }
+    site = json.loads((tmp_path / "library.json").read_text())["templates"]
+    assert [t["id"] for t in site] == ["cut_plug"]
+    entry = site[0]
+    assert entry["name"] == "Cut the plug"
+    assert entry["summary"] == "Cuts the plug."
+    assert entry["risk"] == ""
+    assert entry["author"] == "Alex"
+    assert entry["min_version"] == "0.5.9"
+    assert entry["inputs"] == [{"key": "washdata_device", "name": "Dryer", "description": "", "required": True}]
+    assert entry["urls"]["raw"].endswith("/main/automation/cut_plug.yaml")
+    assert "blueprint_url=https%3A%2F%2Fgithub.com%2F" in entry["urls"]["import"]
     readme = (tmp_path / "README.md").read_text()
     assert "[Cut the plug](automation/cut_plug.yaml)" in readme
     assert "broken" not in readme

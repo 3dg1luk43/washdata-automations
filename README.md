@@ -19,5 +19,6 @@ the automation does.
 WashData's panel or with its online features off.
 
 Share your own: see [CONTRIBUTING](CONTRIBUTING.md). A template is one file; once a pull request is
-merged, the Publish workflow generates `catalog.json`, the list above and each file's `source_url`
-(`python tools/library.py build`). Do not edit those by hand.
+merged, the Publish workflow generates `catalog.json` (what WashData downloads), `library.json` (what
+the [WashData Store](https://3dg1luk43.github.io/washdata-store/templates.html) shows), the list above
+and each file's `source_url` (`python tools/library.py build`). Do not edit those by hand.

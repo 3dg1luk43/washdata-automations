@@ -6,7 +6,8 @@ WashData's Automations tab: it opens GitHub's editor here with a starting file, 
 pull request form. Every template is reviewed before it is merged, because templates switch real
 devices.
 
-Do not edit `catalog.json`, the README's list or `source_url`: they are generated after the merge.
+Do not edit `catalog.json`, `library.json`, the README's list or `source_url`: they are generated after
+the merge.
 
 ## What WashData shows
 

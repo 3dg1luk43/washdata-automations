@@ -1,0 +1,113 @@
+{
+  "templates": [
+    {
+      "id": "cycle_running_indicator",
+      "name": "Turn something on while a cycle runs",
+      "description": "Turns a light, switch or toggle helper on when a WashData cycle starts and off when it ends, also after a false start.\n\nNeeds WashData 0.5.9 or newer.",
+      "summary": "Turns a light, switch or toggle helper on when a WashData cycle starts and off when it ends, also after a false start.",
+      "risk": "",
+      "author": "WashData",
+      "device_types": [
+        "all"
+      ],
+      "min_version": "0.5.9",
+      "tags": [
+        "light",
+        "status"
+      ],
+      "icon": "light",
+      "inputs": [
+        {
+          "key": "washdata_device",
+          "name": "Appliance",
+          "description": "The WashData device to follow.",
+          "required": true
+        },
+        {
+          "key": "target_entity",
+          "name": "Turn on while running",
+          "description": "A light, switch or toggle helper.",
+          "required": true
+        }
+      ],
+      "urls": {
+        "file": "https://github.com/3dg1luk43/washdata-automations/blob/main/automation/cycle_running_indicator.yaml",
+        "raw": "https://raw.githubusercontent.com/3dg1luk43/washdata-automations/main/automation/cycle_running_indicator.yaml",
+        "import": "https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2F3dg1luk43%2Fwashdata-automations%2Fblob%2Fmain%2Fautomation%2Fcycle_running_indicator.yaml"
+      }
+    },
+    {
+      "id": "dryer_anti_crease_power_cut",
+      "name": "End a long dryer anti-crease phase",
+      "description": "Ends the anti-crease tumbling some dryers keep up for hours: the set minutes after the program, it switches the plug off between two tumbles and, by default, back on. A new cycle cancels it.\n\nRisk: it switches a relay while the dryer is plugged in. Use a plug rated for your dryer, at your own risk.\n\nNeeds WashData 0.5.9 or newer.",
+      "summary": "Ends the anti-crease tumbling some dryers keep up for hours: the set minutes after the program, it switches the plug off between two tumbles and, by default, back on. A new cycle cancels it.",
+      "risk": "Risk: it switches a relay while the dryer is plugged in. Use a plug rated for your dryer, at your own risk.",
+      "author": "WashData",
+      "device_types": [
+        "dryer",
+        "washer_dryer"
+      ],
+      "min_version": "0.5.9",
+      "tags": [
+        "anti-crease",
+        "smart plug"
+      ],
+      "icon": "plug",
+      "inputs": [
+        {
+          "key": "washdata_device",
+          "name": "Dryer",
+          "description": "The WashData device of the dryer.",
+          "required": true
+        },
+        {
+          "key": "wait_minutes",
+          "name": "Wait first",
+          "description": "Minutes after the program finishes. The power is cut at the first tumble after that; if the dryer has stopped tumbling, nothing happens.",
+          "required": false
+        },
+        {
+          "key": "low_power_w",
+          "name": "Low-power threshold",
+          "description": "Cut only while the dryer draws less than this, between two tumbles. Gives up if that does not happen within 15 minutes.",
+          "required": false
+        },
+        {
+          "key": "off_seconds",
+          "name": "Power-off time",
+          "description": "",
+          "required": false
+        },
+        {
+          "key": "turn_back_on",
+          "name": "Turn the plug back on",
+          "description": "",
+          "required": false
+        },
+        {
+          "key": "presence_entities",
+          "name": "Only turn back on when one of these is home",
+          "description": "Leave empty to always turn the plug back on. If set and nobody is home, the plug stays off.",
+          "required": false
+        },
+        {
+          "key": "plug_switch",
+          "name": "Plug switch",
+          "description": "Leave empty to use the switch on the same device as WashData's power sensor.",
+          "required": false
+        },
+        {
+          "key": "extra_actions",
+          "name": "Then run",
+          "description": "Optional actions afterwards, for example a notification. The variable switched_back_on tells whether the plug was turned back on.",
+          "required": false
+        }
+      ],
+      "urls": {
+        "file": "https://github.com/3dg1luk43/washdata-automations/blob/main/automation/dryer_anti_crease_power_cut.yaml",
+        "raw": "https://raw.githubusercontent.com/3dg1luk43/washdata-automations/main/automation/dryer_anti_crease_power_cut.yaml",
+        "import": "https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2F3dg1luk43%2Fwashdata-automations%2Fblob%2Fmain%2Fautomation%2Fdryer_anti_crease_power_cut.yaml"
+      }
+    }
+  ]
+}

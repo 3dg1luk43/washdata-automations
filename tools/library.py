@@ -17,7 +17,7 @@
 """The library's own checks and generated files. Needs only PyYAML.
 
     python tools/library.py check          # every rule a template must pass
-    python tools/library.py build          # catalog.json, the README list, source_url
+    python tools/library.py build          # catalog.json, library.json, the README list, source_url
     python tools/library.py build --check  # exit 1 if build would change a file
     python tools/library.py summary        # a Markdown preview of every tile
     python tools/library.py washdata-ref   # the ha_washdata branch CI validates against
@@ -46,9 +46,11 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 AUTOMATION_DIR = ROOT / "automation"
 CATALOG = ROOT / "catalog.json"
+LIBRARY = ROOT / "library.json"
 README = ROOT / "README.md"
 REPO = "https://github.com/3dg1luk43/washdata-automations"
 SOURCE_URL = REPO + "/blob/main/automation/{}.yaml"
+RAW_URL = "https://raw.githubusercontent.com/3dg1luk43/washdata-automations/main/automation/{}.yaml"
 IMPORT_URL = "https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url={}"
 README_START = "<!-- templates:start -->"
 README_END = "<!-- templates:end -->"
@@ -162,6 +164,21 @@ class Template:
     @property
     def summary(self) -> str:
         return self.description.split("\n\n")[0].replace("\n", " ").strip()
+
+    @property
+    def display_name(self) -> str:
+        """The name without the "WashData: " prefix, capitalised."""
+        name = self.name.removeprefix("WashData: ")
+        return name[:1].upper() + name[1:]
+
+    @property
+    def risk(self) -> str:
+        """The description's paragraph that starts with "Risk:", if any."""
+        for paragraph in self.description.split("\n\n"):
+            paragraph = paragraph.replace("\n", " ").strip()
+            if paragraph.startswith("Risk:"):
+                return paragraph
+        return ""
 
     @property
     def author(self) -> str:
@@ -366,6 +383,44 @@ def catalog_text(templates: list[Template]) -> str:
     return json.dumps({t.id: t.catalog_entry() for t in templates}, indent=2, ensure_ascii=False) + "\n"
 
 
+def library_entry(t: Template) -> dict[str, Any]:
+    """One template as a website shows it (the WashData Store reads library.json)."""
+    url = SOURCE_URL.format(t.id)
+    return {
+        "id": t.id,
+        "name": t.display_name,
+        "description": t.description,
+        "summary": t.summary,
+        "risk": t.risk,
+        "author": t.author,
+        "device_types": t.device_types,
+        "min_version": t.min_version,
+        "tags": t.tags,
+        "icon": t.icon,
+        "inputs": [
+            {
+                "key": key,
+                "name": str(spec.get("name") or key).strip(),
+                "description": str(spec.get("description") or "").strip(),
+                "required": "default" not in spec,
+            }
+            for key, spec in iter_inputs(t.blueprint.get("input"))
+        ],
+        "urls": {
+            "file": url,
+            "raw": RAW_URL.format(t.id),
+            "import": IMPORT_URL.format(quote(url, safe="")),
+        },
+    }
+
+
+def library_text(templates: list[Template]) -> str:
+    """library.json: every listed template with its display text, for websites."""
+    return json.dumps(
+        {"templates": [library_entry(t) for t in templates]}, indent=2, ensure_ascii=False
+    ) + "\n"
+
+
 def _cell(text: str) -> str:
     return text.replace("|", "\\|").replace("\n", " ")
 
@@ -376,12 +431,10 @@ def readme_list(templates: list[Template]) -> str:
         "| --- | --- | --- | --- |",
     ]
     for t in templates:
-        name = t.name.removeprefix("WashData: ")
-        name = name[:1].upper() + name[1:]
         url = SOURCE_URL.format(t.id)
         for_ = ", ".join(DEVICE_LABELS.get(d, d) for d in t.device_types)
         imp = f"[Import]({IMPORT_URL.format(quote(url, safe=''))})"
-        rows.append(f"| [{_cell(name)}](automation/{t.id}.yaml) ({imp}) | {_cell(for_)} | {_cell(t.author)} | {_cell(t.summary)} |")
+        rows.append(f"| [{_cell(t.display_name)}](automation/{t.id}.yaml) ({imp}) | {_cell(for_)} | {_cell(t.author)} | {_cell(t.summary)} |")
     if not templates:
         rows = ["No templates yet."]
     return "\n".join(rows)
@@ -408,7 +461,11 @@ def build(check_only: bool = False) -> int:
             changed.append(t.path)
             if not check_only:
                 t.path.write_text(fixed, encoding="utf-8")
-    outputs = {CATALOG: catalog_text(good), README: readme_text(README.read_text(encoding="utf-8"), good)}
+    outputs = {
+        CATALOG: catalog_text(good),
+        LIBRARY: library_text(good),
+        README: readme_text(README.read_text(encoding="utf-8"), good),
+    }
     for path, text in outputs.items():
         if not path.exists() or path.read_text(encoding="utf-8") != text:
             changed.append(path)
