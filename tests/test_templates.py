@@ -14,14 +14,16 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
-"""Every template in the WashData automation library, checked inside a WashData checkout.
+"""Every template in the WashData automation library, on a real Home Assistant.
 
-CI copies this file into ha_washdata's ``tests/`` (so its fixtures and the
-autouse service-schema guard apply) and points ``WASHDATA_TEMPLATES`` at this
-repository. Every template goes through Home Assistant's own loader and schemas,
-WashData's own library parser, is installed through HA's real ``blueprint/save``
-and validated as an automation against a real WashData device. The dryer
-anti-crease template is also run end to end.
+CI copies this file into a ha_washdata checkout's ``tests/`` (so its fixtures
+and the autouse service-schema guard apply) and points ``WASHDATA_TEMPLATES``
+at this repository. ``tools/library.py check`` holds the file rules; here every
+template goes through Home Assistant's own loader and schemas, WashData's
+trigger types and device types, WashData's library parser where the checkout
+has it, an install through HA's real ``blueprint/save`` and the validation HA's
+automation editor runs, against a real WashData device. The dryer anti-crease
+template is also run end to end.
 
 Run locally from a ha_washdata checkout:
 
@@ -31,10 +33,12 @@ Run locally from a ha_washdata checkout:
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import json
 import os
 import re
 import shutil
+import sys
 import time
 from datetime import timedelta
 from pathlib import Path
@@ -53,45 +57,31 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.setup import async_setup_component
 from homeassistant.util import dt as dt_util
 from homeassistant.util import yaml as yaml_util
-from homeassistant.util.yaml import Input
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_fire_time_changed,
     async_mock_service,
 )
 
-import custom_components.ha_washdata  # noqa: F401  (import before the loader: phcc ships its own custom_components)
-from custom_components.ha_washdata import blueprint_catalog
+import custom_components.ha_washdata as washdata  # (import before the loader: phcc ships its own custom_components)
 from custom_components.ha_washdata.const import DEVICE_TRIGGER_TYPES, DEVICE_TYPES, DOMAIN
 
-COMPONENT = Path(blueprint_catalog.__file__).parent
+COMPONENT = Path(washdata.__file__).parent
 ROOT = Path(os.environ.get("WASHDATA_TEMPLATES") or Path(__file__).resolve().parents[1])
 BP_DIR = ROOT / "automation"
-CATALOG = json.loads((ROOT / "catalog.json").read_text(encoding="utf-8"))
-BLUEPRINT_IDS = sorted(p.stem for p in BP_DIR.glob("*.yaml"))
-SOURCE_URL = "https://github.com/3dg1luk43/washdata-automations/blob/main/automation/{}.yaml"
 
-# Kept short so a template reads at a glance in WashData's library. WashData
-# itself cuts anything longer (blueprint_catalog.*_MAX), so these stay below.
-NAME_MAX = 60
-DESCRIPTION_MAX = 400
-FIRST_PARAGRAPH_MAX = 200
-AUTHOR_MAX = 40
-TAGS_MAX = 3
-TAG_MAX = 20
-INPUT_NAME_MAX = 50
-INPUT_DESCRIPTION_MAX = 200
-FILE_MAX_BYTES = 16 * 1024
-# The device trigger types device_trigger.py offers.
-TRIGGER_TYPES = set(DEVICE_TRIGGER_TYPES)
-# A value for every input that has no default, so the automation can be saved.
-REQUIRED_SAMPLES = {("cycle_running_indicator", "target_entity"): "light.laundry"}
 
-# Kept so the behaviour tests read as before; WashData 0.5.9+ always has them.
-needs_device_trigger = pytest.mark.skipif(
-    not (COMPONENT / "device_trigger.py").exists(),
-    reason="this WashData checkout has no device triggers (older than 0.5.9)",
-)
+def _import_library():
+    spec = importlib.util.spec_from_file_location("washdata_library", ROOT / "tools" / "library.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+library = _import_library()
+TEMPLATES = {t.id: t for t in library.load_all(ROOT)}
+BLUEPRINT_IDS = sorted(TEMPLATES)
 
 
 def _load(bp_id: str) -> dict[str, Any]:
@@ -105,16 +95,6 @@ def _blueprint(bp_id: str) -> Blueprint:
     )
 
 
-def _walk(node: Any):
-    yield node
-    if isinstance(node, dict):
-        for value in node.values():
-            yield from _walk(value)
-    elif isinstance(node, list):
-        for value in node:
-            yield from _walk(value)
-
-
 def _manifest_version() -> tuple[int, ...]:
     raw = json.loads((COMPONENT / "manifest.json").read_text(encoding="utf-8"))["version"]
     return tuple(int(x) for x in re.findall(r"\d+", raw)[:3])
@@ -125,121 +105,54 @@ def _manifest_version() -> tuple[int, ...]:
 
 def test_there_are_templates() -> None:
     assert BLUEPRINT_IDS
-    assert all(re.fullmatch(r"[a-z0-9_]{1,64}", i) for i in BLUEPRINT_IDS), BLUEPRINT_IDS
+
+
+@pytest.mark.parametrize("bp_id", BLUEPRINT_IDS)
+def test_template_passes_the_library_rules(bp_id: str) -> None:
+    assert TEMPLATES[bp_id].check() == []
 
 
 @pytest.mark.parametrize("bp_id", BLUEPRINT_IDS)
 def test_blueprint_loads_with_home_assistant(bp_id: str) -> None:
     """HA's loader, its blueprint schema and the automation's own schema all accept it."""
-    data = _load(bp_id)
-    Blueprint(data, path=f"{bp_id}.yaml", expected_domain="automation", schema=BLUEPRINT_SCHEMA)
+    Blueprint(_load(bp_id), path=f"{bp_id}.yaml", expected_domain="automation", schema=BLUEPRINT_SCHEMA)
     bp = _blueprint(bp_id)
     assert bp.validate() is None  # no HA min_version above the one the tests run on
-    meta = bp.metadata
-    assert meta["author"]
-    assert meta["source_url"] == SOURCE_URL.format(bp_id)
-    # HA's current syntax: triggers/actions with trigger:/action: keys.
-    assert "triggers" in data and "actions" in data, bp_id
-    assert "trigger" not in data and "action" not in data, bp_id
-    for node in _walk({"triggers": data["triggers"], "actions": data["actions"]}):
-        if isinstance(node, dict):
-            assert "platform" not in node and "service" not in node, (bp_id, node)
-
-
-def _washdata_triggers(node: Any) -> list[dict[str, Any]]:
-    """Every WashData trigger in a blueprint, the ones in wait_for_trigger too."""
-    return [
-        n for n in _walk(node)
-        if isinstance(n, dict) and str(n.get("trigger", "")).startswith(f"{DOMAIN}.")
-    ]
+    assert bp.metadata["author"]
 
 
 @pytest.mark.parametrize("bp_id", BLUEPRINT_IDS)
-def test_device_input_and_triggers_are_washdata(bp_id: str) -> None:
-    """Triggers v2: the integration triggers (``trigger: ha_washdata.<type>``),
-    targeted at the chosen WashData device, with options from the inputs."""
-    bp = _blueprint(bp_id)
-    device = bp.inputs["washdata_device"]
-    assert "default" not in device
-    assert device["selector"]["device"]["filter"] == [{"integration": DOMAIN}]
-    data = _load(bp_id)
-    triggers = data["triggers"] if isinstance(data["triggers"], list) else [data["triggers"]]
-    assert triggers
-    found = _washdata_triggers(data)
-    assert len(found) >= len(triggers)
-    for trig in triggers:
-        assert str(trig.get("trigger", "")).startswith(f"{DOMAIN}."), (bp_id, trig)
-    assert not [n for n in _walk(data) if isinstance(n, dict) and n.get("trigger") == "device"]
-    for trig in found:
-        assert trig["trigger"].split(".", 1)[1] in TRIGGER_TYPES, (bp_id, trig)
-        assert trig["target"] == {"device_id": Input("washdata_device")}, (bp_id, trig)
-        assert set(trig) <= {"trigger", "id", "target", "options"}, (bp_id, trig)
-
-
-def test_catalog_and_files_match() -> None:
-    assert set(CATALOG) == set(BLUEPRINT_IDS)
-    known = set(DEVICE_TYPES)
-    for bp_id, meta in CATALOG.items():
-        assert set(meta) <= {"device_types", "min_version", "tags", "icon"}, bp_id
-        assert {"device_types", "min_version", "tags"} <= set(meta), bp_id
-        types = meta["device_types"]
-        assert types == ["all"] or (types and set(types) <= known), (bp_id, types)
-        assert re.fullmatch(r"\d+\.\d+\.\d+", meta["min_version"]), bp_id
-        version = tuple(int(x) for x in meta["min_version"].split("."))
-        # 0.5.9 is the first release with WashData triggers, and a template
-        # cannot need a release later than the next one.
-        assert (0, 5, 9) <= version <= (*_manifest_version()[:2], _manifest_version()[2] + 1)
-        tags = meta["tags"]
-        assert isinstance(tags, list) and len(tags) <= TAGS_MAX, bp_id
-        assert all(isinstance(t, str) and 0 < len(t) <= TAG_MAX and t == t.lower() for t in tags), bp_id
-        assert meta.get("icon", "plug") in blueprint_catalog.ICONS, (bp_id, meta.get("icon"))
-        # The description names the WashData version it needs.
-        assert f"WashData {meta['min_version']} or newer" in _blueprint(bp_id).metadata["description"]
-
-
-@pytest.mark.parametrize("bp_id", BLUEPRINT_IDS)
-def test_text_is_short(bp_id: str) -> None:
-    """Short enough to read at a glance; detail belongs in the input descriptions."""
-    path = BP_DIR / f"{bp_id}.yaml"
-    assert path.stat().st_size <= FILE_MAX_BYTES
-    meta = _blueprint(bp_id).metadata
-    assert len(meta["name"]) <= NAME_MAX, meta["name"]
-    description = meta.get("description", "").strip()
-    assert description and len(description) <= DESCRIPTION_MAX, len(description)
-    assert len(description.split("\n\n")[0]) <= FIRST_PARAGRAPH_MAX
-    author = meta.get("author", "")
-    assert author.strip() and len(author) <= AUTHOR_MAX, author
-    for key, spec in blueprint_catalog.iter_inputs(_load(bp_id)["blueprint"]["input"]):
-        assert len(str(spec.get("name") or key)) <= INPUT_NAME_MAX, key
-        assert len(str(spec.get("description") or "")) <= INPUT_DESCRIPTION_MAX, key
-
-
-def test_no_em_dash() -> None:
-    files = [*BP_DIR.glob("*.yaml"), ROOT / "catalog.json"]
-    for path in files:
-        assert "\u2014" not in path.read_text(encoding="utf-8"), path.name
+def test_triggers_and_device_types_are_washdatas(bp_id: str) -> None:
+    template = TEMPLATES[bp_id]
+    for trig in library.washdata_triggers(template.data):
+        assert trig["trigger"].split(".", 1)[1] in set(DEVICE_TRIGGER_TYPES), (bp_id, trig["trigger"])
+    types = template.device_types
+    assert types == ["all"] or set(types) <= set(DEVICE_TYPES), (bp_id, types)
+    if template.min_version:
+        # The checkout CI picked is at least the version the template needs.
+        assert tuple(int(x) for x in template.min_version.split(".")) <= _manifest_version()
 
 
 def test_washdata_reads_each_template_whole() -> None:
     """WashData's own parser (the one the panel's list comes from) accepts each
-    template and cuts nothing: no !include, !secret or !env_var, text in limits."""
+    template and cuts nothing."""
+    try:
+        from custom_components.ha_washdata import blueprint_catalog  # pylint: disable=import-outside-toplevel
+    except ImportError:
+        pytest.skip("this WashData checkout has no template library")
+    if not hasattr(blueprint_catalog, "async_fetch_library"):
+        pytest.skip("this WashData checkout predates the downloaded library")
     version = ".".join(str(x) for x in _manifest_version())
-    for bp_id in BLUEPRINT_IDS:
-        text = (BP_DIR / f"{bp_id}.yaml").read_text(encoding="utf-8")
-        item = blueprint_catalog.describe(bp_id, text, CATALOG[bp_id], version)
+    for bp_id, template in TEMPLATES.items():
+        item = blueprint_catalog.describe(bp_id, template.text, template.catalog_entry(), version)
         bp = _blueprint(bp_id)
         assert item["name"] == bp.name
         assert item["description"] == bp.metadata["description"].strip()
         assert item["author"] == bp.metadata["author"]
-        assert item["source_url"] == SOURCE_URL.format(bp_id)
-        assert item["tags"] == CATALOG[bp_id]["tags"]
+        assert item["tags"] == template.tags
+        assert item["icon"] == template.icon
         assert item["compatible"] is True
         assert [i["key"] for i in item["inputs"]] == list(bp.inputs)
-        expected = all(
-            isinstance(spec, dict) and "default" in spec
-            for key, spec in bp.inputs.items() if key != "washdata_device"
-        )
-        assert item["one_click"] is expected, bp_id
 
 
 # ─── Installed and used on a real Home Assistant ─────────────────────────────
@@ -251,11 +164,51 @@ async def _device_id(hass, entry) -> str:
     return device.id
 
 
+def _sample(selector: Any, device_id: str) -> Any:
+    """A value an input with this selector accepts, for one with no default."""
+    if not isinstance(selector, dict) or not selector:
+        return None
+    kind, spec = next(iter(selector.items()))
+    spec = spec if isinstance(spec, dict) else {}
+    multiple = bool(spec.get("multiple"))
+    if kind == "entity":
+        filters = spec.get("filter") or []
+        filters = filters if isinstance(filters, list) else [filters]
+        domain = next((f.get("domain") for f in filters if isinstance(f, dict) and f.get("domain")), "sensor")
+        value = f"{domain[0] if isinstance(domain, list) else domain}.sample"
+    elif kind == "device":
+        value = device_id
+    elif kind == "number":
+        value = spec.get("min", 0)
+    elif kind == "boolean":
+        value = False
+    elif kind in ("text", "template", "area", "floor", "label", "location"):
+        value = "sample"
+    elif kind == "select":
+        options = spec.get("options") or [""]
+        value = options[0]["value"] if isinstance(options[0], dict) else options[0]
+    elif kind == "time":
+        value = "08:00:00"
+    elif kind == "duration":
+        value = {"minutes": 1}
+    elif kind == "target":
+        value = {"entity_id": "light.sample"}
+    elif kind == "action":
+        value = []
+    elif kind == "object":
+        value = {}
+    elif kind == "icon":
+        value = "mdi:washing-machine"
+    else:
+        return None
+    return [value] if multiple else value
+
+
 def _instance(bp_id: str, device_id: str, **inputs: Any) -> dict[str, Any]:
     values = {"washdata_device": device_id, **inputs}
-    for (owner, key), sample in REQUIRED_SAMPLES.items():
-        if owner == bp_id:
-            values.setdefault(key, sample)
+    for key, spec in library.iter_inputs(_load(bp_id)["blueprint"].get("input")):
+        if key not in values and "default" not in spec:
+            values[key] = _sample(spec.get("selector"), device_id)
     return {
         "id": f"t_{bp_id}",
         "alias": bp_id,
@@ -263,14 +216,13 @@ def _instance(bp_id: str, device_id: str, **inputs: Any) -> dict[str, Any]:
     }
 
 
-@needs_device_trigger
 @pytest.mark.parametrize("bp_id", BLUEPRINT_IDS)
 async def test_installed_blueprint_validates_as_an_automation(
     hass, setup_washdata_entry, hass_ws_client, tmp_path, bp_id: str
 ) -> None:
     """The panel's install path: HA's blueprint/save, then an automation with
-    only the device (and the required inputs) filled in, through the validation
-    HA's automation editor runs before it saves."""
+    only the device filled in (and a sample value for any input with no default),
+    through the validation HA's automation editor runs before it saves."""
     hass.config.config_dir = str(tmp_path)
     entry = await setup_washdata_entry("Dryer", device_type="dryer")
     assert await async_setup_component(hass, "automation", {})
@@ -278,19 +230,11 @@ async def test_installed_blueprint_validates_as_an_automation(
     text = (BP_DIR / f"{bp_id}.yaml").read_text(encoding="utf-8")
     await client.send_json_auto_id({
         "type": "blueprint/save", "domain": "automation",
-        "path": f"ha_washdata/{bp_id}", "yaml": text, "source_url": SOURCE_URL.format(bp_id),
+        "path": f"ha_washdata/{bp_id}", "yaml": text, "source_url": library.SOURCE_URL.format(bp_id),
     })
     res = await client.receive_json()
     assert res["success"], res
     assert (tmp_path / "blueprints" / "automation" / "ha_washdata" / f"{bp_id}.yaml").is_file()
-
-    blueprint = _blueprint(bp_id)
-    missing = [
-        key for key, spec in blueprint.inputs.items()
-        if key != "washdata_device" and not (isinstance(spec, dict) and "default" in spec)
-        and (bp_id, key) not in REQUIRED_SAMPLES
-    ]
-    assert not missing, f"add a sample value for {missing} to REQUIRED_SAMPLES"
 
     config = _instance(bp_id, await _device_id(hass, entry))
     validated = await async_validate_config_item(hass, config["id"], config)
@@ -387,7 +331,6 @@ async def _tumble(hass, entry, **overrides: Any) -> None:
     await _fire(hass, entry, "still_tumbling", **{**TUMBLE, **overrides})
 
 
-@needs_device_trigger
 async def test_anti_crease_cuts_and_restores_the_plug(hass, setup_washdata_entry, tmp_path) -> None:
     entry, calls, done = await _anti_crease(hass, setup_washdata_entry, tmp_path)
     await _set_power(hass, "180")  # the next tumble began before the run
@@ -401,7 +344,6 @@ async def test_anti_crease_cuts_and_restores_the_plug(hass, setup_washdata_entry
     assert done == [{"on": True}]
 
 
-@needs_device_trigger
 async def test_anti_crease_reads_a_kw_sensor_as_watts(hass, setup_washdata_entry, tmp_path) -> None:
     """0.18 kW is a 180 W tumble, not 0.18 W under the 10 W threshold (#481)."""
     entry, calls, _done = await _anti_crease(hass, setup_washdata_entry, tmp_path)
@@ -414,7 +356,6 @@ async def test_anti_crease_reads_a_kw_sensor_as_watts(hass, setup_washdata_entry
     assert [c.data["entity_id"] for c in calls["off"]] == [[PLUG]]
 
 
-@needs_device_trigger
 async def test_anti_crease_waits_for_its_minutes(hass, setup_washdata_entry, tmp_path) -> None:
     """The wait is the trigger's option now: a tumble before it does nothing,
     the first one after it does."""
@@ -430,7 +371,6 @@ async def test_anti_crease_waits_for_its_minutes(hass, setup_washdata_entry, tmp
     assert done == [{"on": True}]
 
 
-@needs_device_trigger
 async def test_anti_crease_uses_the_chosen_switch(hass, setup_washdata_entry, tmp_path) -> None:
     entry, calls, done = await _anti_crease(
         hass, setup_washdata_entry, tmp_path, plug_device=False, plug_switch="switch.other_plug",
@@ -442,7 +382,6 @@ async def test_anti_crease_uses_the_chosen_switch(hass, setup_washdata_entry, tm
     assert done == [{"on": True}]
 
 
-@needs_device_trigger
 async def test_anti_crease_leaves_the_plug_off_when_nobody_is_home(
     hass, setup_washdata_entry, tmp_path
 ) -> None:
@@ -458,7 +397,6 @@ async def test_anti_crease_leaves_the_plug_off_when_nobody_is_home(
     assert done == [{"on": False}]
 
 
-@needs_device_trigger
 async def test_anti_crease_is_cancelled_by_a_new_cycle(hass, setup_washdata_entry, tmp_path) -> None:
     entry, calls, done = await _anti_crease(hass, setup_washdata_entry, tmp_path)
     await _set_power(hass, "250")
@@ -469,7 +407,6 @@ async def test_anti_crease_is_cancelled_by_a_new_cycle(hass, setup_washdata_entr
     assert not calls["off"] and not calls["on"] and not done
 
 
-@needs_device_trigger
 async def test_anti_crease_gives_up_when_the_power_never_drops(
     hass, setup_washdata_entry, tmp_path
 ) -> None:
@@ -481,7 +418,6 @@ async def test_anti_crease_gives_up_when_the_power_never_drops(
     assert not calls["off"] and not done
 
 
-@needs_device_trigger
 async def test_anti_crease_without_a_plug_switch_logs_and_stops(
     hass, setup_washdata_entry, tmp_path, caplog
 ) -> None:
@@ -491,7 +427,6 @@ async def test_anti_crease_without_a_plug_switch_logs_and_stops(
     assert "no plug switch found" in caplog.text
 
 
-@needs_device_trigger
 async def test_anti_crease_end_to_end_on_a_real_dryer(
     hass, setup_washdata_entry, tmp_path, freezer
 ) -> None:

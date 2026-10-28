@@ -1,3 +1,6 @@
+# icon: plug
+# device_types: [dryer, washer_dryer]
+# tags: [anti-crease, smart plug]
 blueprint:
   name: "WashData: end a long dryer anti-crease phase"
   description: >-

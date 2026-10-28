@@ -10,8 +10,7 @@
 
 ## Checklist
 
-- [ ] One template: `automation/<id>.yaml` and its entry in `catalog.json`
+- [ ] One template, one file: `automation/<id>.yaml` (no `catalog.json` or README edits, they are generated)
 - [ ] `author:` is my name or GitHub handle
 - [ ] Short name and description (see [CONTRIBUTING](https://github.com/3dg1luk43/washdata-automations/blob/main/CONTRIBUTING.md#rules)); any risk in a `Risk:` paragraph
-- [ ] `washdata_device` is a device selector filtered to `integration: ha_washdata`, triggers are WashData triggers
 - [ ] A new cycle starting cancels anything still waiting

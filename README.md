@@ -8,12 +8,16 @@ this library from GitHub: it only works with WashData's online features turned o
 Each template becomes a normal Home Assistant automation. WashData never switches anything itself;
 the automation does.
 
-| Template | For | What it does |
-| --- | --- | --- |
-| [End a long dryer anti-crease phase](automation/dryer_anti_crease_power_cut.yaml) | dryers, washer-dryers | Cuts the plug between two tumbles once the dryer keeps tumbling past the set minutes, then by default turns it back on. |
-| [Turn something on while a cycle runs](automation/cycle_running_indicator.yaml) | all | A light, switch or helper on at the start, off at the end. |
+<!-- templates:start -->
+| Template | For | Author | What it does |
+| --- | --- | --- | --- |
+| [Turn something on while a cycle runs](automation/cycle_running_indicator.yaml) ([Import](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2F3dg1luk43%2Fwashdata-automations%2Fblob%2Fmain%2Fautomation%2Fcycle_running_indicator.yaml)) | all | WashData | Turns a light, switch or toggle helper on when a WashData cycle starts and off when it ends, also after a false start. |
+| [End a long dryer anti-crease phase](automation/dryer_anti_crease_power_cut.yaml) ([Import](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2F3dg1luk43%2Fwashdata-automations%2Fblob%2Fmain%2Fautomation%2Fdryer_anti_crease_power_cut.yaml)) | dryers, washer-dryers | WashData | Ends the anti-crease tumbling some dryers keep up for hours: the set minutes after the program, it switches the plug off between two tumbles and, by default, back on. A new cycle cancels it. |
+<!-- templates:end -->
 
-Without WashData's panel, import one with
-[My Home Assistant](https://my.home-assistant.io/redirect/blueprint_import/) and the file's GitHub URL.
+**Import** opens [My Home Assistant](https://my.home-assistant.io/), for a Home Assistant without
+WashData's panel or with its online features off.
 
-Share your own: see [CONTRIBUTING](CONTRIBUTING.md).
+Share your own: see [CONTRIBUTING](CONTRIBUTING.md). A template is one file; once a pull request is
+merged, the Publish workflow generates `catalog.json`, the list above and each file's `source_url`
+(`python tools/library.py build`). Do not edit those by hand.

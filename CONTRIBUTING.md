@@ -1,35 +1,42 @@
 # Sharing a template
 
-One template per pull request. The quickest start is **Share your own template** at the bottom of
+One template per pull request, and a template is one file: `automation/<id>.yaml`, where `<id>` is
+lowercase letters, digits and `_`. The quickest start is **Share your own template** at the bottom of
 WashData's Automations tab: it opens GitHub's editor here with a starting file, and saving it opens the
 pull request form. Every template is reviewed before it is merged, because templates switch real
 devices.
 
-## What a PR contains
+Do not edit `catalog.json`, the README's list or `source_url`: they are generated after the merge.
 
-- `automation/<id>.yaml`: the blueprint. `<id>` is lowercase letters, digits and `_`.
-- Its entry in `catalog.json`:
+## What WashData shows
 
-  ```json
-  "my_template": {
-    "device_types": ["dryer", "washer_dryer"],
-    "min_version": "0.5.9",
-    "tags": ["smart plug"],
-    "icon": "plug"
-  }
-  ```
+The tile's text is the first paragraph of the description. Comment lines above `blueprint:` set the
+rest, all optional:
 
-  `device_types`: WashData device types, or `["all"]`. `min_version`: the oldest WashData it works on.
-  `tags`: up to 3, lowercase. `icon`: `plug`, `light`, `bell`, `dryer`, `washer`, `dishwasher`,
-  `timer` or `power`.
+```yaml
+# icon: plug
+# device_types: [dryer, washer_dryer]
+# tags: [anti-crease, smart plug]
+blueprint:
+  name: "WashData: end a long dryer anti-crease phase"
+  description: >-
+    One or two sentences: what it does and when.
+
+
+    Needs WashData 0.5.9 or newer.
+```
+
+- `icon`: `plug`, `light`, `bell`, `dryer`, `washer`, `dishwasher`, `timer` or `power`.
+- `device_types`: WashData device types (`washing_machine`, `dryer`, `washer_dryer`, `dishwasher`,
+  `pump`, `generic`, `other`), or leave it out for all.
+- `tags`: up to 3, lowercase.
+- `Needs WashData <version> or newer.` in the description: the oldest WashData it works on.
 
 ## Rules
 
 - `author:` set to your name or GitHub handle (shown in WashData).
-- Short text: name up to 60 characters, description up to 400 with a first paragraph of up to 200
-  (that paragraph is what the library tile shows). Put detail in the input descriptions.
-- The description ends with `Needs WashData <min_version> or newer.`
-- `source_url` is the file's own path on `main` in this repository.
+- Short text: name up to 60 characters, description up to 400 with a first paragraph of up to 200.
+  Put detail in the input descriptions.
 - Input `washdata_device`: a device selector filtered to `integration: ha_washdata`. Trigger on
   WashData's triggers (`trigger: ha_washdata.<type>`, targeted at that input).
 - Give every other input a default where one makes sense: the template then installs in one click.
@@ -41,9 +48,16 @@ devices.
 
 ## Checks
 
-CI validates every template inside a WashData checkout: Home Assistant's own blueprint and automation
-schemas, an install through `blueprint/save`, WashData's library parser, and the rules above. To run
-it locally from a `ha_washdata` clone:
+Every pull request runs the rules above (`python tools/library.py check`, which names each broken
+rule) and installs each template on a real Home Assistant with WashData, through Home Assistant's own
+blueprint and automation validation. The run's summary previews the tile. To run the rules locally:
+
+```bash
+pip install pyyaml
+python tools/library.py check
+```
+
+The full check, from a `ha_washdata` clone:
 
 ```bash
 cp ../washdata-automations/tests/test_templates.py tests/test_washdata_templates.py

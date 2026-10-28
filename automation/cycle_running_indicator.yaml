@@ -1,3 +1,6 @@
+# icon: light
+# device_types: [all]
+# tags: [light, status]
 blueprint:
   name: "WashData: turn something on while a cycle runs"
   description: >-

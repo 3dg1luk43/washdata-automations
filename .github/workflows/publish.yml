@@ -1,0 +1,43 @@
+name: Publish the library
+
+# After a merge: catalog.json (what WashData downloads), the README's list and
+# each template's source_url are generated from the templates and committed
+# here. Only templates that pass tools/library.py check are listed. Its own push
+# starts no workflow (GITHUB_TOKEN), so it cannot loop.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: main
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.13"
+      - run: pip install pyyaml==6.0.2
+      - name: Generate the library files
+        run: python tools/library.py build
+      - name: Commit them
+        run: |
+          git add -A automation catalog.json README.md
+          if git diff --cached --quiet; then
+            echo "Nothing to publish."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Publish the library"
+          git push origin HEAD:main
