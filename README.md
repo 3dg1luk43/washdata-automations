@@ -5,8 +5,8 @@ for [WashData](https://github.com/3dg1luk43/ha_washdata), the integration that w
 and dishwashers through a smart plug. They appear in the panel's **Automations** tab, which downloads
 this library from GitHub: it only works with WashData's online features turned on.
 
-Each template becomes a normal Home Assistant automation. WashData never switches anything itself;
-the automation does.
+Each template becomes a normal Home Assistant automation, and the automation does the switching:
+you can see, edit and turn it off like any other.
 
 <!-- templates:start -->
 | Template | For | Author | What it does |
