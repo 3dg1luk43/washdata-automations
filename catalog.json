@@ -10,6 +10,17 @@
     ],
     "icon": "light"
   },
+  "delete_short_interrupted_cycles": {
+    "device_types": [
+      "all"
+    ],
+    "min_version": "0.6.0",
+    "tags": [
+      "cleanup",
+      "cycles"
+    ],
+    "icon": "timer"
+  },
   "dryer_anti_crease_power_cut": {
     "device_types": [
       "dryer",

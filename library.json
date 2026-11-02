@@ -37,6 +37,42 @@
       }
     },
     {
+      "id": "delete_short_interrupted_cycles",
+      "name": "Delete short interrupted cycles",
+      "description": "Deletes a cycle that ended as interrupted and was shorter than the set minutes, so false starts do not fill the cycle list.\n\nRisk: a deleted cycle cannot be restored. Completed and force-stopped cycles are never touched.\n\nNeeds WashData 0.6.0 or newer.",
+      "summary": "Deletes a cycle that ended as interrupted and was shorter than the set minutes, so false starts do not fill the cycle list.",
+      "risk": "Risk: a deleted cycle cannot be restored. Completed and force-stopped cycles are never touched.",
+      "author": "WashData",
+      "device_types": [
+        "all"
+      ],
+      "min_version": "0.6.0",
+      "tags": [
+        "cleanup",
+        "cycles"
+      ],
+      "icon": "timer",
+      "inputs": [
+        {
+          "key": "washdata_device",
+          "name": "Appliance",
+          "description": "The WashData device to clean up.",
+          "required": true
+        },
+        {
+          "key": "max_minutes",
+          "name": "Shorter than",
+          "description": "Only an interrupted cycle shorter than this is deleted.",
+          "required": false
+        }
+      ],
+      "urls": {
+        "file": "https://github.com/3dg1luk43/washdata-automations/blob/main/automation/delete_short_interrupted_cycles.yaml",
+        "raw": "https://raw.githubusercontent.com/3dg1luk43/washdata-automations/main/automation/delete_short_interrupted_cycles.yaml",
+        "import": "https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2F3dg1luk43%2Fwashdata-automations%2Fblob%2Fmain%2Fautomation%2Fdelete_short_interrupted_cycles.yaml"
+      }
+    },
+    {
       "id": "dryer_anti_crease_power_cut",
       "name": "End a long dryer anti-crease phase",
       "description": "Ends the anti-crease tumbling some dryers keep up for hours: the set minutes after the program, it switches the plug off between two tumbles and, by default, back on. A new cycle cancels it.\n\nRisk: it switches a relay while the dryer is plugged in. Use a plug rated for your dryer, at your own risk.\n\nNeeds WashData 0.5.9 or newer.",

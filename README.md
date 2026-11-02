@@ -12,6 +12,7 @@ you can see, edit and turn it off like any other.
 | Template | For | Author | What it does |
 | --- | --- | --- | --- |
 | [Turn something on while a cycle runs](automation/cycle_running_indicator.yaml) ([Import](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2F3dg1luk43%2Fwashdata-automations%2Fblob%2Fmain%2Fautomation%2Fcycle_running_indicator.yaml)) | all | WashData | Turns a light, switch or toggle helper on when a WashData cycle starts and off when it ends, also after a false start. |
+| [Delete short interrupted cycles](automation/delete_short_interrupted_cycles.yaml) ([Import](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2F3dg1luk43%2Fwashdata-automations%2Fblob%2Fmain%2Fautomation%2Fdelete_short_interrupted_cycles.yaml)) | all | WashData | Deletes a cycle that ended as interrupted and was shorter than the set minutes, so false starts do not fill the cycle list. |
 | [End a long dryer anti-crease phase](automation/dryer_anti_crease_power_cut.yaml) ([Import](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2F3dg1luk43%2Fwashdata-automations%2Fblob%2Fmain%2Fautomation%2Fdryer_anti_crease_power_cut.yaml)) | dryers, washer-dryers | WashData | Ends the anti-crease tumbling some dryers keep up for hours: the set minutes after the program, it switches the plug off between two tumbles and, by default, back on. A new cycle cancels it. |
 <!-- templates:end -->
 
