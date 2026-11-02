@@ -1,0 +1,57 @@
+# icon: timer
+# tags: [cleanup, cycles]
+blueprint:
+  name: "WashData: delete short interrupted cycles"
+  description: >-
+    Deletes a cycle that ended as interrupted and was shorter than the set
+    minutes, so false starts do not fill the cycle list.
+
+
+    Risk: a deleted cycle cannot be restored. Completed and force-stopped
+    cycles are never touched.
+
+
+    Needs WashData 0.6.0 or newer.
+  domain: automation
+  author: WashData
+  source_url: https://github.com/3dg1luk43/washdata-automations/blob/main/automation/delete_short_interrupted_cycles.yaml
+  input:
+    washdata_device:
+      name: Appliance
+      description: The WashData device to clean up.
+      selector:
+        device:
+          filter:
+            - integration: ha_washdata
+    max_minutes:
+      name: Shorter than
+      description: Only an interrupted cycle shorter than this is deleted.
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 60
+          unit_of_measurement: min
+
+mode: queued
+max_exceeded: silent
+
+triggers:
+  - trigger: ha_washdata.cycle_ended
+    target:
+      device_id: !input washdata_device
+    options:
+      status: interrupted
+
+variables:
+  max_minutes: !input max_minutes
+
+conditions:
+  - "{{ trigger.cycle_id | default('', true) | string | length > 0 }}"
+  - "{{ (trigger.duration | float(0)) < (max_minutes | float(0)) * 60 }}"
+
+actions:
+  - action: ha_washdata.delete_cycle
+    data:
+      device_id: !input washdata_device
+      cycle_id: "{{ trigger.cycle_id }}"
